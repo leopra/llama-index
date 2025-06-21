@@ -1,7 +1,5 @@
 # Makefile for Weaviate Chatbot Project
 
-.PHONY: help install start stop status clean setup add-documents add-all-sample-data chat streamlit logs restart
-
 install: ## Install Python dependencies using Poetry
 	poetry install
 
