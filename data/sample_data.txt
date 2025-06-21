@@ -1,0 +1,57 @@
+# Sample Knowledge Base Content
+
+## About Weaviate
+
+Weaviate is an open-source vector database that stores both objects and vectors, allowing for combining vector search with structured filtering. It's designed to handle large-scale machine learning applications.
+
+### Key Features
+
+1. **Vector Search**: Perform semantic searches using machine learning models
+2. **GraphQL API**: Query your data using GraphQL
+3. **RESTful API**: Standard REST endpoints for CRUD operations
+4. **Real-time**: Get results in real-time
+5. **Scalable**: Designed to scale horizontally
+
+### Use Cases
+
+- **Semantic Search**: Find content based on meaning, not just keywords
+- **Recommendation Systems**: Build personalized recommendation engines
+- **Knowledge Graphs**: Create and query knowledge graphs
+- **Chatbots**: Power conversational AI with contextual understanding
+- **Content Discovery**: Help users discover relevant content
+
+### Getting Started
+
+To get started with Weaviate:
+
+1. Install using Docker: `docker run -p 8080:8080 semitechnologies/weaviate:latest`
+2. Create a schema for your data
+3. Import your data
+4. Start querying!
+
+### LlamaIndex Integration
+
+LlamaIndex provides excellent integration with Weaviate through the `llama-index-vector-stores-weaviate` package. This allows you to:
+
+- Use Weaviate as a vector store for your documents
+- Perform hybrid search (vector + keyword)
+- Build RAG (Retrieval Augmented Generation) applications
+- Create chatbots with long-term memory
+
+## Sample Story Content
+
+### A Meeting in Hyde Park
+
+Paolo adjusted his scarf as he walked through the crisp autumn air of Hyde Park. The golden leaves crunched beneath his feet as he made his way toward the Serpentine Lake, where he had agreed to meet Marta. They had been friends since university, but it had been months since they last saw each other.
+
+As he approached the water's edge, he spotted Marta sitting on their usual bench, feeding ducks with breadcrumbs from a paper bag. Her dark hair caught the afternoon sunlight, and she wore the same blue coat he remembered from their student days. When she looked up and saw him approaching, her face lit up with a warm smile.
+
+"Paolo! You made it," Marta called out, standing to embrace her old friend. "I was beginning to think you'd gotten lost in the city."
+
+"Never," Paolo laughed, hugging her tightly. "Though I must admit, London has changed quite a bit since we were here for that conference three years ago."
+
+They spent the afternoon walking through the park, catching up on their lives, careers, and dreams. The conversation flowed as naturally as it always had, punctuated by comfortable silences as they watched families playing on the grass and tourists taking photos of the memorial fountains.
+
+As the sun began to set, painting the sky in shades of orange and pink, they found themselves back at the lake. "Same time next year?" Marta asked, already knowing the answer.
+
+"Wouldn't miss it for the world," Paolo replied, and they both knew that some friendships, like the timeless beauty of Hyde Park, never truly fade.

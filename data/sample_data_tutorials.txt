@@ -1,0 +1,493 @@
+# Technical Tutorials and How-To Guides
+
+## Getting Started with Vector Search in Python
+
+### Setting Up Your Environment
+
+First, let's install the necessary packages for working with vector databases and embeddings:
+
+```bash
+pip install weaviate-client sentence-transformers numpy pandas matplotlib
+```
+
+### Basic Vector Search Implementation
+
+Here's a simple example of implementing vector search using Weaviate:
+
+```python
+import weaviate
+import numpy as np
+from sentence_transformers import SentenceTransformer
+
+# Initialize the embedding model
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+# Connect to Weaviate
+client = weaviate.Client(
+    url="http://localhost:8080",
+    additional_headers={"X-OpenAI-Api-Key": "your-openai-key"}
+)
+
+# Define schema
+schema = {
+    "classes": [
+        {
+            "class": "Document",
+            "description": "A document with text content",
+            "properties": [
+                {
+                    "name": "content",
+                    "dataType": ["text"],
+                    "description": "The text content of the document"
+                },
+                {
+                    "name": "title",
+                    "dataType": ["string"],
+                    "description": "The title of the document"
+                }
+            ],
+            "vectorizer": "text2vec-openai"
+        }
+    ]
+}
+
+# Create schema
+client.schema.create(schema)
+
+# Add documents
+documents = [
+    {"title": "AI Introduction", "content": "Artificial intelligence is the simulation of human intelligence..."},
+    {"title": "Machine Learning Basics", "content": "Machine learning is a subset of AI that focuses on algorithms..."},
+    {"title": "Deep Learning Guide", "content": "Deep learning uses neural networks with multiple layers..."}
+]
+
+# Insert documents
+for doc in documents:
+    client.data_object.create(doc, "Document")
+
+# Perform vector search
+query = "What is artificial intelligence?"
+response = client.query.get("Document", ["title", "content"]).with_near_text({"concepts": [query]}).with_limit(3).do()
+
+print("Search Results:")
+for result in response['data']['Get']['Document']:
+    print(f"Title: {result['title']}")
+    print(f"Content: {result['content'][:100]}...")
+    print("---")
+```
+
+### Advanced Filtering with Vector Search
+
+```python
+# Search with filters
+response = client.query.get("Document", ["title", "content"]).with_near_text({
+    "concepts": ["machine learning"]
+}).with_where({
+    "path": ["title"],
+    "operator": "Like",
+    "valueString": "*Learning*"
+}).with_limit(5).do()
+```
+
+## Building a RAG (Retrieval-Augmented Generation) System
+
+### Architecture Overview
+
+A RAG system combines information retrieval with text generation:
+
+1. **Document Ingestion**: Process and embed documents
+2. **Retrieval**: Find relevant documents using vector search
+3. **Generation**: Use retrieved context to generate responses
+
+### Implementation with LlamaIndex
+
+```python
+from llama_index.core import VectorStoreIndex, Document, Settings
+from llama_index.vector_stores.weaviate import WeaviateVectorStore
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.llms.openai import OpenAI
+import weaviate
+
+# Configure LlamaIndex settings
+Settings.llm = OpenAI(model="gpt-4")
+Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
+
+# Initialize Weaviate client
+client = weaviate.Client("http://localhost:8080")
+
+# Create vector store
+vector_store = WeaviateVectorStore(
+    weaviate_client=client,
+    index_name="KnowledgeBase"
+)
+
+# Create documents
+documents = [
+    Document(text="Python is a high-level programming language known for its simplicity."),
+    Document(text="Machine learning algorithms can learn patterns from data."),
+    Document(text="Vector databases store high-dimensional vectors for similarity search.")
+]
+
+# Build index
+index = VectorStoreIndex.from_documents(
+    documents,
+    vector_store=vector_store
+)
+
+# Create query engine
+query_engine = index.as_query_engine(similarity_top_k=3)
+
+# Query the system
+response = query_engine.query("What is Python programming language?")
+print(response)
+```
+
+### Chunking Strategies for Better Retrieval
+
+```python
+from llama_index.core.text_splitter import TokenTextSplitter
+
+# Initialize text splitter
+text_splitter = TokenTextSplitter(
+    separator=" ",
+    chunk_size=512,
+    chunk_overlap=20
+)
+
+# Process long documents
+def process_long_document(text, title):
+    chunks = text_splitter.split_text(text)
+    documents = []
+    
+    for i, chunk in enumerate(chunks):
+        doc = Document(
+            text=chunk,
+            metadata={"title": title, "chunk_id": i}
+        )
+        documents.append(doc)
+    
+    return documents
+
+# Example usage
+long_text = "..." # Your long document text
+chunks = process_long_document(long_text, "Research Paper")
+```
+
+## Optimizing Vector Search Performance
+
+### Indexing Strategies
+
+#### HNSW Index Configuration
+
+```python
+# Configure HNSW index for better performance
+index_config = {
+    "vectorIndexType": "hnsw",
+    "vectorIndexConfig": {
+        "maxConnections": 64,
+        "efConstruction": 128,
+        "ef": -1,
+        "skip": False,
+        "cleanupIntervalSeconds": 300,
+        "pq": {
+            "enabled": False,
+            "bitCompression": False,
+            "segments": 0,
+            "centroids": 256,
+            "trainingLimit": 100000,
+            "encoder": {
+                "type": "kmeans",
+                "distribution": "log-normal"
+            }
+        }
+    }
+}
+
+# Apply to schema
+schema_class["vectorIndexConfig"] = index_config["vectorIndexConfig"]
+```
+
+#### Batch Operations for Large Datasets
+
+```python
+# Efficient batch insertion
+batch_size = 100
+documents = [...] # Your large document list
+
+with client.batch as batch:
+    batch.batch_size = batch_size
+    
+    for i, doc in enumerate(documents):
+        batch.add_data_object(
+            data_object=doc,
+            class_name="Document"
+        )
+        
+        if i % 1000 == 0:
+            print(f"Processed {i} documents")
+```
+
+### Query Optimization Techniques
+
+#### Hybrid Search (Vector + Keyword)
+
+```python
+# Combine vector search with keyword search
+hybrid_query = client.query.get("Document", ["title", "content"]).with_hybrid(
+    query="machine learning algorithms",
+    alpha=0.7  # Weight between vector (0) and keyword (1) search
+).with_limit(10)
+
+response = hybrid_query.do()
+```
+
+#### Using Reranking
+
+```python
+from sentence_transformers import CrossEncoder
+
+# Initialize reranking model
+reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+
+def rerank_results(query, results, top_k=5):
+    # Prepare pairs for reranking
+    pairs = [[query, result['content']] for result in results]
+    
+    # Get reranking scores
+    scores = reranker.predict(pairs)
+    
+    # Sort by score
+    scored_results = list(zip(results, scores))
+    scored_results.sort(key=lambda x: x[1], reverse=True)
+    
+    return [result for result, score in scored_results[:top_k]]
+```
+
+## Monitoring and Debugging Vector Search
+
+### Performance Monitoring
+
+```python
+import time
+import statistics
+
+def benchmark_search(client, queries, iterations=10):
+    results = []
+    
+    for query in queries:
+        times = []
+        
+        for _ in range(iterations):
+            start_time = time.time()
+            
+            response = client.query.get("Document", ["title"]).with_near_text({
+                "concepts": [query]
+            }).with_limit(10).do()
+            
+            end_time = time.time()
+            times.append(end_time - start_time)
+        
+        avg_time = statistics.mean(times)
+        results.append({
+            "query": query,
+            "avg_response_time": avg_time,
+            "results_count": len(response['data']['Get']['Document'])
+        })
+    
+    return results
+
+# Run benchmark
+test_queries = ["artificial intelligence", "machine learning", "data science"]
+benchmark_results = benchmark_search(client, test_queries)
+
+for result in benchmark_results:
+    print(f"Query: {result['query']}")
+    print(f"Avg Response Time: {result['avg_response_time']:.3f}s")
+    print(f"Results Count: {result['results_count']}")
+    print("---")
+```
+
+### Debugging Search Results
+
+```python
+def debug_search_results(client, query, expected_results=None):
+    # Get search results with additional metadata
+    response = client.query.get("Document", ["title", "content"]).with_near_text({
+        "concepts": [query]
+    }).with_additional(["certainty", "distance"]).with_limit(10).do()
+    
+    results = response['data']['Get']['Document']
+    
+    print(f"Query: {query}")
+    print(f"Total Results: {len(results)}")
+    print("\nTop Results:")
+    
+    for i, result in enumerate(results[:5]):
+        print(f"{i+1}. Title: {result['title']}")
+        print(f"   Certainty: {result['_additional']['certainty']:.3f}")
+        print(f"   Distance: {result['_additional']['distance']:.3f}")
+        print(f"   Content: {result['content'][:100]}...")
+        print()
+    
+    # Analyze result quality
+    if expected_results:
+        found_expected = sum(1 for result in results 
+                           if any(exp in result['title'].lower() 
+                                 for exp in expected_results))
+        print(f"Expected results found: {found_expected}/{len(expected_results)}")
+
+# Example usage
+debug_search_results(
+    client, 
+    "deep learning neural networks",
+    expected_results=["neural", "deep", "learning"]
+)
+```
+
+## Working with Different Data Types
+
+### Text Processing
+
+```python
+import re
+from typing import List
+
+def preprocess_text(text: str) -> str:
+    # Remove extra whitespace
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Remove special characters but keep periods and commas
+    text = re.sub(r'[^\w\s.,!?-]', '', text)
+    
+    # Convert to lowercase
+    text = text.lower().strip()
+    
+    return text
+
+def extract_metadata(text: str) -> dict:
+    # Extract basic statistics
+    word_count = len(text.split())
+    sentence_count = len(re.split(r'[.!?]+', text))
+    
+    # Extract potential entities (simple approach)
+    capitalized_words = re.findall(r'\b[A-Z][a-z]+\b', text)
+    
+    return {
+        "word_count": word_count,
+        "sentence_count": sentence_count,
+        "entities": list(set(capitalized_words))
+    }
+```
+
+### Image and Multimodal Search
+
+```python
+from sentence_transformers import SentenceTransformer
+import requests
+from PIL import Image
+import io
+
+# Initialize multimodal model
+model = SentenceTransformer('clip-ViT-B-32')
+
+def encode_image(image_path):
+    image = Image.open(image_path)
+    return model.encode(image)
+
+def encode_text(text):
+    return model.encode(text)
+
+# Example: Search images using text query
+def search_images_by_text(client, text_query, limit=5):
+    # Encode text query
+    query_vector = encode_text(text_query)
+    
+    # Search using vector
+    response = client.query.get("Image", ["title", "description"]).with_near_vector({
+        "vector": query_vector.tolist()
+    }).with_limit(limit).do()
+    
+    return response['data']['Get']['Image']
+```
+
+## Advanced Vector Database Patterns
+
+### Multi-tenancy Implementation
+
+```python
+class MultiTenantVectorStore:
+    def __init__(self, client):
+        self.client = client
+    
+    def create_tenant_schema(self, tenant_id: str):
+        schema = {
+            "class": f"Document_{tenant_id}",
+            "description": f"Documents for tenant {tenant_id}",
+            "properties": [
+                {"name": "content", "dataType": ["text"]},
+                {"name": "tenant_id", "dataType": ["string"]}
+            ]
+        }
+        
+        self.client.schema.create_class(schema)
+    
+    def add_document(self, tenant_id: str, document: dict):
+        document["tenant_id"] = tenant_id
+        
+        self.client.data_object.create(
+            data_object=document,
+            class_name=f"Document_{tenant_id}"
+        )
+    
+    def search(self, tenant_id: str, query: str):
+        return self.client.query.get(f"Document_{tenant_id}", ["content"]).with_near_text({
+            "concepts": [query]
+        }).with_where({
+            "path": ["tenant_id"],
+            "operator": "Equal",
+            "valueString": tenant_id
+        }).do()
+```
+
+### Versioning and A/B Testing
+
+```python
+class VersionedVectorStore:
+    def __init__(self, client):
+        self.client = client
+        self.versions = {}
+    
+    def create_version(self, version_name: str, embedding_model: str):
+        self.versions[version_name] = {
+            "class_name": f"Document_v{version_name}",
+            "embedding_model": embedding_model
+        }
+        
+        # Create schema for this version
+        schema = {
+            "class": f"Document_v{version_name}",
+            "vectorizer": embedding_model,
+            "properties": [
+                {"name": "content", "dataType": ["text"]},
+                {"name": "version", "dataType": ["string"]}
+            ]
+        }
+        
+        self.client.schema.create_class(schema)
+    
+    def compare_versions(self, query: str, versions: List[str]):
+        results = {}
+        
+        for version in versions:
+            if version in self.versions:
+                class_name = self.versions[version]["class_name"]
+                response = self.client.query.get(class_name, ["content"]).with_near_text({
+                    "concepts": [query]
+                }).with_limit(5).do()
+                
+                results[version] = response['data']['Get'][class_name]
+        
+        return results
+```
+
+This comprehensive tutorial collection covers the essential aspects of working with vector databases, from basic setup to advanced optimization techniques. Each example includes practical code that can be adapted to specific use cases and requirements.
