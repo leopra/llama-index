@@ -12,6 +12,7 @@ from llama_index.core import (
 )
 from llama_index.vector_stores.weaviate import WeaviateVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
 from transformers import AutoTokenizer
 
@@ -28,13 +29,15 @@ class WeaviateChatbot:
                  index_name: str = "ChatbotKnowledge",
                  model_name: str = "gpt-4o-mini",
                  openai_base_url: Optional[str] = None,
-                 use_local_embeddings: bool = True,
-                 embedding_model_name: str = "BAAI/bge-small-en-v1.5"):
+                 use_local_embeddings: bool = False,
+                 embedding_model_name: str = "BAAI/bge-small-en-v1.5",
+                 vllm_embedding_url: str = "http://localhost:8000"):
         self.weaviate_url = weaviate_url
         self.index_name = index_name
         self.model_name = model_name
         self.use_local_embeddings = use_local_embeddings
         self.embedding_model_name = embedding_model_name
+        self.vllm_embedding_url = vllm_embedding_url
         self.openai_base_url = openai_base_url or os.getenv("BASE_URL")
         
         if not os.getenv("OPENAI_API_KEY"):
@@ -49,11 +52,20 @@ class WeaviateChatbot:
         
         Settings.llm = OpenAI(**llm_kwargs)
         
-        Settings.embed_model = HuggingFaceEmbedding(
-            model_name=self.embedding_model_name,
-            trust_remote_code=False,
-            device="cpu"
-        )
+        # Setup embedding model - use vLLM server by default
+        if self.use_local_embeddings:
+            Settings.embed_model = HuggingFaceEmbedding(
+                model_name=self.embedding_model_name,
+                trust_remote_code=False,
+                device="cpu"
+            )
+        else:
+            # Use vLLM server for embeddings
+            Settings.embed_model = OpenAIEmbedding(
+                model=self.embedding_model_name,
+                api_base=f"{self.vllm_embedding_url}/v1",
+                api_key="dummy-key"  # vLLM doesn't require real API key
+            )
         
         Settings.tokenizer = AutoTokenizer.from_pretrained(
             self.embedding_model_name
@@ -210,11 +222,12 @@ class WeaviateChatbot:
 def main():
     """Simple CLI interface for testing the chatbot"""
     try:
-        # Initialize chatbot with local embeddings by default
+        # Initialize chatbot with vLLM embeddings by default
         base_url = os.getenv("BASE_URL")
         chatbot = WeaviateChatbot(
             openai_base_url=base_url,
-            embedding_model_name="BAAI/bge-small-en-v1.5"
+            embedding_model_name="bge-small-en-v1.5",
+            use_local_embeddings=False  # Use vLLM server instead
         )
         print("-" * 50)
         
